@@ -1,4 +1,4 @@
-# NYX – Password-Protected Chatbot on Hugging Face Spaces  
+# NYX – Chatbot on Hugging Face Spaces  
 
 **NYX** is a lightweight conversational AI chatbot powered by the **Gemma-2-2B-IT** model, built with **Transformers**, **PyTorch**, and **Gradio**. It runs directly in a Hugging Face Space, providing a simple web interface for natural conversations.  
 
