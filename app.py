@@ -1,11 +1,6 @@
 import gradio as gr
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from huggingface_hub import login
-import os
-
-# Login using HF token stored in Space secrets
-login(os.environ["HF_TOKEN"])
 
 model_name = "google/gemma-2-2b-it"
 
@@ -47,7 +42,7 @@ def chat(user_message, history):
         do_sample=True
     )
 
-    # Proper token-level slicing (removes prompt completely)
+    # Proper token slicing (removes prompt completely)
     generated_tokens = outputs[0][inputs["input_ids"].shape[-1]:]
 
     response = tokenizer.decode(
