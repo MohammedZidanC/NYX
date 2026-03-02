@@ -4,11 +4,12 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import login
 import os
 
-# Login
+# Login using HF token stored in Space secrets
 login(os.environ["HF_TOKEN"])
 
 model_name = "google/gemma-2-2b-it"
 
+# Load tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 model = AutoModelForCausalLM.from_pretrained(
@@ -21,10 +22,8 @@ def chat(user_message, history):
     if history is None:
         history = []
 
-    # Build full conversation history properly
-    messages = [
-        {"role": "system", "content": "You are Nyx, an intelligent AI assistant. Answer clearly and directly."}
-    ]
+    # Build conversation history
+    messages = []
 
     for user, bot in history:
         messages.append({"role": "user", "content": user})
@@ -32,7 +31,7 @@ def chat(user_message, history):
 
     messages.append({"role": "user", "content": user_message})
 
-    # Apply proper chat template
+    # Apply Gemma chat template
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -48,10 +47,13 @@ def chat(user_message, history):
         do_sample=True
     )
 
-    decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    # Proper token-level slicing (removes prompt completely)
+    generated_tokens = outputs[0][inputs["input_ids"].shape[-1]:]
 
-    # Extract only the last assistant reply
-    response = decoded[len(prompt):].strip()
+    response = tokenizer.decode(
+        generated_tokens,
+        skip_special_tokens=True
+    ).strip()
 
     history.append((user_message, response))
     return history, history
