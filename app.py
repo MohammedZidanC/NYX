@@ -2,22 +2,27 @@ import gradio as gr
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+# Disable gradients (important for memory)
+torch.set_grad_enabled(False)
+
 model_name = "google/gemma-2-2b-it"
 
-# Load tokenizer and model
+# Load tokenizer
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+# Load model in reduced memory mode
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
-    torch_dtype="auto",
-    device_map="auto"
+    low_cpu_mem_usage=True,
+    torch_dtype=torch.float32
 )
+
+model.eval()
 
 def chat(user_message, history):
     if history is None:
         history = []
 
-    # Build conversation history
     messages = []
 
     for user, bot in history:
@@ -26,23 +31,21 @@ def chat(user_message, history):
 
     messages.append({"role": "user", "content": user_message})
 
-    # Apply Gemma chat template
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
         add_generation_prompt=True
     )
 
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    inputs = tokenizer(prompt, return_tensors="pt")
 
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=150,
-        temperature=0.7,
-        do_sample=True
-    )
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=80,   # reduce generation length
+            do_sample=False
+        )
 
-    # Proper token slicing (removes prompt completely)
     generated_tokens = outputs[0][inputs["input_ids"].shape[-1]:]
 
     response = tokenizer.decode(
@@ -55,7 +58,7 @@ def chat(user_message, history):
 
 
 with gr.Blocks() as demo:
-    gr.Markdown("# 🤖 Nyx - AI Chatbot (Powered by Gemma 2B)")
+    gr.Markdown("# 🤖 Nyx - AI Chatbot (Gemma 2-2B-it)")
 
     chatbot = gr.Chatbot()
     msg = gr.Textbox(label="Type your message")
