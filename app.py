@@ -4,12 +4,11 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import login
 import os
 
-# Authenticate (HF_TOKEN must be in Space secrets)
+# Login
 login(os.environ["HF_TOKEN"])
 
 model_name = "google/gemma-2-2b-it"
 
-# Load tokenizer and model (GPU auto if available)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 model = AutoModelForCausalLM.from_pretrained(
@@ -22,13 +21,18 @@ def chat(user_message, history):
     if history is None:
         history = []
 
-    # Create structured chat messages
+    # Build full conversation history properly
     messages = [
-        {"role": "system", "content": "You are Nyx, an intelligent AI assistant. Answer clearly and directly."},
-        {"role": "user", "content": user_message}
+        {"role": "system", "content": "You are Nyx, an intelligent AI assistant. Answer clearly and directly."}
     ]
 
-    # Apply Gemma chat template
+    for user, bot in history:
+        messages.append({"role": "user", "content": user})
+        messages.append({"role": "assistant", "content": bot})
+
+    messages.append({"role": "user", "content": user_message})
+
+    # Apply proper chat template
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -44,18 +48,15 @@ def chat(user_message, history):
         do_sample=True
     )
 
-    response = tokenizer.decode(
-        outputs[0],
-        skip_special_tokens=True
-    )
+    decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-    # Extract only model reply
-    response = response.split("model")[-1].strip()
+    # Extract only the last assistant reply
+    response = decoded[len(prompt):].strip()
 
     history.append((user_message, response))
     return history, history
 
-# Gradio UI
+
 with gr.Blocks() as demo:
     gr.Markdown("# 🤖 Nyx - AI Chatbot (Powered by Gemma 2B)")
 
