@@ -1,48 +1,69 @@
 import gradio as gr
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import login
 import os
 
-# Step 1: Authenticate using the Hugging Face token stored as a Space secret
-login(os.environ["HF_TOKEN"])  #added HF_TOKEN in your Space secrets
+# Authenticate (HF_TOKEN must be in Space secrets)
+login(os.environ["HF_TOKEN"])
 
-# Step 2: Load Gemma-2-2b-it model
 model_name = "google/gemma-2-2b-it"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
-generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
 
-# Step 3: Chat function
-def chat(user_message, history=None):
+# Load tokenizer and model (GPU auto if available)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype="auto",
+    device_map="auto"
+)
+
+def chat(user_message, history):
     if history is None:
         history = []
 
-    # Simple greeting handling
-    greetings = ["hi", "hello", "hey", "hola"]
-    if user_message.lower() in greetings:
-        response = "NYX: Hello! How are you?"
-    else:
-        # Generate a response from the model
-        result = generator(
-            f"You are NYX, a helpful chatbot. Answer clearly and concisely: {user_message}",
-            max_length=200,
-            do_sample=False
-        )[0]['generated_text']
-        response = f"NYX: {result}"
+    # Create structured chat messages
+    messages = [
+        {"role": "system", "content": "You are Nyx, an intelligent AI assistant. Answer clearly and directly."},
+        {"role": "user", "content": user_message}
+    ]
+
+    # Apply Gemma chat template
+    prompt = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True
+    )
+
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=150,
+        temperature=0.7,
+        do_sample=True
+    )
+
+    response = tokenizer.decode(
+        outputs[0],
+        skip_special_tokens=True
+    )
+
+    # Extract only model reply
+    response = response.split("model")[-1].strip()
 
     history.append((user_message, response))
     return history, history
 
-# Step 4: Gradio Interface
+# Gradio UI
 with gr.Blocks() as demo:
+    gr.Markdown("# 🤖 Nyx - AI Chatbot (Powered by Gemma 2B)")
+
     chatbot = gr.Chatbot()
-    msg_box = gr.Textbox(label="Type your message")
+    msg = gr.Textbox(label="Type your message")
     clear = gr.Button("Clear Chat")
 
-    # Submit message
-    msg_box.submit(chat, [msg_box, chatbot], [chatbot, chatbot])
-
-    # Clear chat button
+    msg.submit(chat, [msg, chatbot], [chatbot, chatbot])
     clear.click(lambda: [], None, chatbot)
 
 demo.launch()
